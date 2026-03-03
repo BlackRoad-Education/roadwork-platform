@@ -485,43 +485,69 @@
     </footer>
 
     <script>
-        async function askQuestion() {
-            const question = document.getElementById('question').value;
-            const response = document.getElementById('demo-response');
+        // ─── Configuration ────────────────────────────────────────────────────
+        const OLLAMA_BASE_URL = 'http://localhost:11434';
+        const OLLAMA_MODEL = 'llama3';
+        const STRIPE_CHECKOUT_URL = 'https://buy.stripe.com/roadwork-monthly';
 
-            if (!question) {
+        // Mention aliases that should all route to Ollama
+        const OLLAMA_MENTION_RE = /@(copilot|lucidia|blackboxprogramming|ollama)\.?\s*/gi;
+
+        // ─── Helpers ──────────────────────────────────────────────────────────
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // ─── Demo ─────────────────────────────────────────────────────────────
+        async function askQuestion() {
+            const raw = document.getElementById('question').value.trim();
+            const responseEl = document.getElementById('demo-response');
+
+            if (!raw) {
                 alert('Please enter a question!');
                 return;
             }
 
-            response.style.display = 'block';
-            response.innerHTML = '<p>🤖 Roadie is thinking...</p>';
+            // Strip any @mention prefix and route to Ollama regardless
+            const prompt = raw.replace(OLLAMA_MENTION_RE, '').trim();
 
-            // Simulate AI response (replace with actual API call)
-            setTimeout(() => {
-                response.innerHTML = `
-                    <h3>Question: ${question}</h3>
-                    <h4>Step-by-Step Solution:</h4>
-                    <p><strong>Step 1:</strong> Subtract 5 from both sides<br>
-                    2x + 5 - 5 = 13 - 5<br>
-                    2x = 8</p>
+            responseEl.style.display = 'block';
+            responseEl.innerHTML = '<p>🤖 Roadie is thinking…</p>';
 
-                    <p><strong>Step 2:</strong> Divide both sides by 2<br>
-                    2x / 2 = 8 / 2<br>
-                    x = 4</p>
+            try {
+                const res = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false })
+                });
 
-                    <p><strong>Answer:</strong> x = 4</p>
+                if (!res.ok) {
+                    throw new Error(`Ollama returned HTTP ${res.status}`);
+                }
 
-                    <p style="margin-top: var(--space-md); color: var(--hot-pink);">
-                    ✨ Want unlimited help like this? <a href="#" onclick="checkout()" style="color: var(--hot-pink); text-decoration: underline;">Start your free trial</a>
-                    </p>
-                `;
-            }, 1500);
+                const data = await res.json();
+                responseEl.innerHTML = `
+                    <h3></h3>
+                    <div id="_ollama_answer" style="margin-top:var(--space-md);white-space:pre-wrap"></div>
+                    <p style="margin-top:var(--space-md);color:var(--hot-pink);">
+                        ✨ Want unlimited help like this?
+                        <a href="#" onclick="checkout()" style="color:var(--hot-pink);text-decoration:underline;">Start your free trial</a>
+                    </p>`;
+                responseEl.querySelector('h3').textContent = 'Question: ' + raw;
+                responseEl.querySelector('#_ollama_answer').textContent = data.response || '';
+            } catch (err) {
+                responseEl.innerHTML = '<p style="color:var(--hot-pink);">⚠️ Could not reach Ollama.<br>' +
+                    'Make sure Ollama is running locally (<code>ollama serve</code>) and try again.</p>';
+            }
         }
 
+        // ─── Stripe checkout ──────────────────────────────────────────────────
         function checkout() {
-            // Replace with actual Stripe checkout
-            alert('🎓 Starting your free trial!\n\nYou\'ll get:\n• 14 days free\n• Unlimited questions\n• All subjects\n• 24/7 access\n\nThen just $9/month. Cancel anytime!\n\nContact: blackroad.systems@gmail.com');
+            window.location.href = STRIPE_CHECKOUT_URL;
         }
     </script>
 </body>
